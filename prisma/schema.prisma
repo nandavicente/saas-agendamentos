@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  PROFESSIONAL
+  ADMIN
+  RECEPTION
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  BOLETO
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELED
+}
+
+model Tenant {
+  id        Int      @id @default(autoincrement())
+  name      String
+  domain    String?  @unique
+  createdAt DateTime @default(now())
+
+  users        User[]
+  services     Service[]
+  products     Product[]
+  packages     Package[]
+  logs         AuditLog[]
+  appointments Appointment[]
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole
+  phone     String?
+  createdAt DateTime @default(now())
+
+  services                   Service[]     @relation("ProfessionalServices")
+  appointmentsAsClient       Appointment[] @relation("ClientAppointments")
+  appointmentsAsProfessional Appointment[] @relation("ProfessionalAppointments")
+
+  auditLogs AuditLog[]
+}
+
+model Service {
+  id             Int      @id @default(autoincrement())
+  tenantId       Int
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  professionalId Int
+  professional   User     @relation("ProfessionalServices", fields: [professionalId], references: [id])
+  name           String
+  description    String?
+  price          Float
+  durationMin    Int
+  createdAt      DateTime @default(now())
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  id             Int               @id @default(autoincrement())
+  tenantId       Int
+  tenant         Tenant            @relation(fields: [tenantId], references: [id])
+  scheduledAt    DateTime
+  status         AppointmentStatus @default(PENDING)
+  clientId       Int
+  professionalId Int
+  serviceId      Int
+  client         User              @relation("ClientAppointments", fields: [clientId], references: [id])
+  professional   User              @relation("ProfessionalAppointments", fields: [professionalId], references: [id])
+  service        Service           @relation(fields: [serviceId], references: [id])
+  payments       Payment[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  appointmentId Int
+  appointment   Appointment   @relation(fields: [appointmentId], references: [id])
+  amount        Float
+  method        PaymentMethod
+  providerId    String? // id do gateway (ex: Stripe PaymentIntent id)
+  status        PaymentStatus @default(PENDING)
+  installments  Int? // se parcelado
+  createdAt     DateTime      @default(now())
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  sku       String?  @unique
+  price     Float
+  stock     Int
+  createdAt DateTime @default(now())
+}
+
+model Package {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  sessions  Int
+  price     Float
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now())
+  Tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
